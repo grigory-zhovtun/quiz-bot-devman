@@ -15,7 +15,7 @@ from telegram.ext import (
     ConversationHandler,
 )
 
-from read_quiz_files import parse_questions_and_answers_from_file
+from read_quiz_files import load_all_questions_from_directory, clean_quiz_answer
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +25,14 @@ class QuizState(Enum):
     ANSWERING = 2
 
 
-def load_all_questions_from_directory(directory_path):
-    all_questions_and_answers = {}
-    for quiz_filename in os.listdir(directory_path):
-        filepath = os.path.join(directory_path, quiz_filename)
-        file_questions = parse_questions_and_answers_from_file(filepath)
-        all_questions_and_answers.update(file_questions)
-    return all_questions_and_answers
-
-
-def clean_quiz_answer(raw_answer):
-    cleaned = raw_answer.split('.')[0]
-    cleaned = cleaned.split('(')[0]
-    return cleaned.strip()
-
-
-def handle_start_command(update: Update, context: CallbackContext):
+def handle_start_command(update: Update, context: CallbackContext) -> QuizState:
     quiz_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счёт']]
     reply_markup = ReplyKeyboardMarkup(quiz_keyboard)
     update.message.reply_text('Привет! Я бот для викторины!', reply_markup=reply_markup)
     return QuizState.CHOOSING
 
 
-def handle_new_question_request(update: Update, context: CallbackContext):
+def handle_new_question_request(update: Update, context: CallbackContext) -> QuizState:
     random_question = random.choice(list(context.bot_data['questions_and_answers']))
     redis_connection = context.bot_data['redis_connection']
     redis_connection.set(update.effective_user.id, random_question)
@@ -55,9 +40,13 @@ def handle_new_question_request(update: Update, context: CallbackContext):
     return QuizState.ANSWERING
 
 
-def handle_solution_attempt(update: Update, context: CallbackContext):
+def handle_solution_attempt(update: Update, context: CallbackContext) -> QuizState:
     redis_connection = context.bot_data['redis_connection']
     current_question = redis_connection.get(update.effective_user.id)
+
+    if not current_question:
+        update.message.reply_text('Нажми «Новый вопрос», чтобы начать!')
+        return QuizState.CHOOSING
 
     correct_answer = context.bot_data['questions_and_answers'][current_question]
     cleaned_correct_answer = clean_quiz_answer(correct_answer)
@@ -70,9 +59,13 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
         return QuizState.ANSWERING
 
 
-def handle_give_up(update: Update, context: CallbackContext):
+def handle_give_up(update: Update, context: CallbackContext) -> QuizState:
     redis_connection = context.bot_data['redis_connection']
     current_question = redis_connection.get(update.effective_user.id)
+
+    if not current_question:
+        update.message.reply_text('Нажми «Новый вопрос», чтобы начать!')
+        return QuizState.CHOOSING
 
     correct_answer = context.bot_data['questions_and_answers'][current_question]
     update.message.reply_text(f'Правильный ответ: {correct_answer}')

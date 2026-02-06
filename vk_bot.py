@@ -8,27 +8,12 @@ from dotenv import load_dotenv
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
 
-from read_quiz_files import parse_questions_and_answers_from_file
+from read_quiz_files import load_all_questions_from_directory, clean_quiz_answer
 
 logger = logging.getLogger(__name__)
 
 
-def load_all_questions_from_directory(directory_path):
-    all_questions_and_answers = {}
-    for quiz_filename in os.listdir(directory_path):
-        filepath = os.path.join(directory_path, quiz_filename)
-        file_questions = parse_questions_and_answers_from_file(filepath)
-        all_questions_and_answers.update(file_questions)
-    return all_questions_and_answers
-
-
-def clean_quiz_answer(raw_answer):
-    cleaned = raw_answer.split('.')[0]
-    cleaned = cleaned.split('(')[0]
-    return cleaned.strip()
-
-
-def build_quiz_keyboard():
+def build_quiz_keyboard() -> VkKeyboard:
     keyboard = VkKeyboard()
     keyboard.add_button('Новый вопрос', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.NEGATIVE)
@@ -37,22 +22,28 @@ def build_quiz_keyboard():
     return keyboard
 
 
-def send_message(event, vk_api, keyboard, message):
+def send_message(event, vk_api, keyboard: VkKeyboard, message: str) -> None:
     vk_api.messages.send(
         user_id=event.user_id,
         message=message,
         keyboard=keyboard.get_keyboard(),
-        random_id=random.randint(1, 1000),
+        random_id=random.randint(1, 2**31),
     )
 
 
-def handle_new_question_request(event, vk_api, keyboard, redis_connection, questions_and_answers):
+def handle_new_question_request(
+    event, vk_api, keyboard: VkKeyboard,
+    redis_connection: redis.Redis, questions_and_answers: dict[str, str],
+) -> None:
     random_question = random.choice(list(questions_and_answers))
     redis_connection.set(event.user_id, random_question)
     send_message(event, vk_api, keyboard, random_question)
 
 
-def handle_solution_attempt(event, vk_api, keyboard, redis_connection, questions_and_answers):
+def handle_solution_attempt(
+    event, vk_api, keyboard: VkKeyboard,
+    redis_connection: redis.Redis, questions_and_answers: dict[str, str],
+) -> None:
     current_question = redis_connection.get(event.user_id)
 
     if not current_question:
@@ -68,8 +59,16 @@ def handle_solution_attempt(event, vk_api, keyboard, redis_connection, questions
         send_message(event, vk_api, keyboard, 'Неправильно... Попробуешь ещё раз?')
 
 
-def handle_give_up(event, vk_api, keyboard, redis_connection, questions_and_answers):
+def handle_give_up(
+    event, vk_api, keyboard: VkKeyboard,
+    redis_connection: redis.Redis, questions_and_answers: dict[str, str],
+) -> None:
     current_question = redis_connection.get(event.user_id)
+
+    if not current_question:
+        send_message(event, vk_api, keyboard, 'Напиши «Новый вопрос», чтобы начать!')
+        return
+
     correct_answer = questions_and_answers[current_question]
     send_message(event, vk_api, keyboard, f'Правильный ответ: {correct_answer}')
     handle_new_question_request(event, vk_api, keyboard, redis_connection, questions_and_answers)
@@ -97,9 +96,12 @@ if __name__ == '__main__':
 
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            if event.text == 'Новый вопрос':
-                handle_new_question_request(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
-            elif event.text == 'Сдаться':
-                handle_give_up(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
-            else:
-                handle_solution_attempt(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            try:
+                if event.text == 'Новый вопрос':
+                    handle_new_question_request(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+                elif event.text == 'Сдаться':
+                    handle_give_up(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+                else:
+                    handle_solution_attempt(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            except Exception:
+                logger.exception('Ошибка при обработке сообщения ВКонтакте')
