@@ -2,7 +2,7 @@ import logging
 
 from dotenv import load_dotenv
 from os import getenv
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 logging.basicConfig(
@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def handle_start_command(update: Update, context: CallbackContext):
-    update.message.reply_text('Здравствуйте')
+    quiz_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счёт']]
+    reply_markup = ReplyKeyboardMarkup(quiz_keyboard)
+    update.message.reply_text('Привет! Я бот для викторины!', reply_markup=reply_markup)
 
 
 def echo_user_message(update: Update, context: CallbackContext):
