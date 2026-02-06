@@ -74,6 +74,16 @@ def handle_solution_attempt(update: Update, context: CallbackContext):
         return QuizState.ANSWERING
 
 
+def handle_give_up(update: Update, context: CallbackContext):
+    redis_connection = context.bot_data['redis_connection']
+    current_question = redis_connection.get(update.effective_user.id)
+
+    correct_answer = context.bot_data['questions_and_answers'][current_question]
+    update.message.reply_text(f'Правильный ответ: {correct_answer}')
+
+    return handle_new_question_request(update, context)
+
+
 if __name__ == '__main__':
     load_dotenv()
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -97,6 +107,7 @@ if __name__ == '__main__':
             ],
             QuizState.ANSWERING: [
                 MessageHandler(Filters.regex('^Новый вопрос$'), handle_new_question_request),
+                MessageHandler(Filters.regex('^Сдаться$'), handle_give_up),
                 MessageHandler(Filters.text & ~Filters.command, handle_solution_attempt),
             ],
         },
