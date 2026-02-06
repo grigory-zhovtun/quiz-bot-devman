@@ -2,6 +2,7 @@ import logging
 import os
 import random
 
+import redis
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
@@ -32,6 +33,8 @@ def handle_start_command(update: Update, context: CallbackContext):
 
 def handle_new_question_request(update: Update, context: CallbackContext):
     random_question = random.choice(list(context.bot_data['questions_and_answers']))
+    redis_connection = context.bot_data['redis_connection']
+    redis_connection.set(update.effective_user.id, random_question)
     update.message.reply_text(random_question)
 
 
@@ -46,6 +49,12 @@ if __name__ == '__main__':
     updater = Updater(telegram_bot_token)
     dispatcher = updater.dispatcher
 
+    redis_connection = redis.Redis(
+        host=os.getenv('REDIS_HOST', 'localhost'),
+        port=int(os.getenv('REDIS_PORT', 6379)),
+        decode_responses=True,
+    )
+    dispatcher.bot_data['redis_connection'] = redis_connection
     dispatcher.bot_data['questions_and_answers'] = load_all_questions_from_directory('quiz-questions')
 
     dispatcher.add_handler(CommandHandler('start', handle_start_command))
