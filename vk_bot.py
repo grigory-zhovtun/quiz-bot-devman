@@ -10,10 +10,6 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 
 from read_quiz_files import parse_questions_and_answers_from_file
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-)
 logger = logging.getLogger(__name__)
 
 
@@ -80,6 +76,10 @@ def handle_give_up(event, vk_api, keyboard, redis_connection, questions_and_answ
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO,
+    )
     load_dotenv()
 
     vk_session = vk.VkApi(token=os.getenv('VK_GROUP_TOKEN'))
