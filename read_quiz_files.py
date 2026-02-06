@@ -21,7 +21,7 @@ def parse_questions_and_answers_from_file(filepath: str) -> dict[str, str]:
             question_without_number = block.split(':\n', maxsplit=1)[1]
             current_question_text = question_without_number
 
-        elif block.startswith('Ответ') and current_question_text is not None:
+        elif block.startswith('Ответ') and current_question_text:
             answer_text = block.split(':\n', maxsplit=1)[1]
             questions_and_answers[current_question_text] = answer_text
 
