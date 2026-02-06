@@ -1,11 +1,19 @@
 import logging
 import os
 import random
+from enum import Enum
 
 import redis
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    Filters,
+    CallbackContext,
+    ConversationHandler,
+)
 
 from read_quiz_files import parse_questions_and_answers_from_file
 
@@ -14,6 +22,11 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+
+class QuizState(Enum):
+    CHOOSING = 1
+    ANSWERING = 2
 
 
 def load_all_questions_from_directory(directory_path):
@@ -35,6 +48,7 @@ def handle_start_command(update: Update, context: CallbackContext):
     quiz_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счёт']]
     reply_markup = ReplyKeyboardMarkup(quiz_keyboard)
     update.message.reply_text('Привет! Я бот для викторины!', reply_markup=reply_markup)
+    return QuizState.CHOOSING
 
 
 def handle_new_question_request(update: Update, context: CallbackContext):
@@ -42,23 +56,22 @@ def handle_new_question_request(update: Update, context: CallbackContext):
     redis_connection = context.bot_data['redis_connection']
     redis_connection.set(update.effective_user.id, random_question)
     update.message.reply_text(random_question)
+    return QuizState.ANSWERING
 
 
-def handle_answer_attempt(update: Update, context: CallbackContext):
+def handle_solution_attempt(update: Update, context: CallbackContext):
     redis_connection = context.bot_data['redis_connection']
     current_question = redis_connection.get(update.effective_user.id)
-
-    if not current_question:
-        update.message.reply_text('Нажми «Новый вопрос», чтобы начать!')
-        return
 
     correct_answer = context.bot_data['questions_and_answers'][current_question]
     cleaned_correct_answer = clean_quiz_answer(correct_answer)
 
     if update.message.text.lower() == cleaned_correct_answer.lower():
         update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос».')
+        return QuizState.CHOOSING
     else:
         update.message.reply_text('Неправильно... Попробуешь ещё раз?')
+        return QuizState.ANSWERING
 
 
 if __name__ == '__main__':
@@ -76,9 +89,21 @@ if __name__ == '__main__':
     dispatcher.bot_data['redis_connection'] = redis_connection
     dispatcher.bot_data['questions_and_answers'] = load_all_questions_from_directory('quiz-questions')
 
-    dispatcher.add_handler(CommandHandler('start', handle_start_command))
-    dispatcher.add_handler(MessageHandler(Filters.regex('^Новый вопрос$'), handle_new_question_request))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_answer_attempt))
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', handle_start_command)],
+        states={
+            QuizState.CHOOSING: [
+                MessageHandler(Filters.regex('^Новый вопрос$'), handle_new_question_request),
+            ],
+            QuizState.ANSWERING: [
+                MessageHandler(Filters.regex('^Новый вопрос$'), handle_new_question_request),
+                MessageHandler(Filters.text & ~Filters.command, handle_solution_attempt),
+            ],
+        },
+        fallbacks=[CommandHandler('start', handle_start_command)],
+    )
+
+    dispatcher.add_handler(conversation_handler)
 
     updater.start_polling()
     updater.idle()
