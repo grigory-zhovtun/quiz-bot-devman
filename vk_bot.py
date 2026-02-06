@@ -1,10 +1,35 @@
+import logging
 import os
 import random
 
+import redis
 import vk_api as vk
 from dotenv import load_dotenv
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
+
+from read_quiz_files import parse_questions_and_answers_from_file
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+
+def load_all_questions_from_directory(directory_path):
+    all_questions_and_answers = {}
+    for quiz_filename in os.listdir(directory_path):
+        filepath = os.path.join(directory_path, quiz_filename)
+        file_questions = parse_questions_and_answers_from_file(filepath)
+        all_questions_and_answers.update(file_questions)
+    return all_questions_and_answers
+
+
+def clean_quiz_answer(raw_answer):
+    cleaned = raw_answer.split('.')[0]
+    cleaned = cleaned.split('(')[0]
+    return cleaned.strip()
 
 
 def build_quiz_keyboard():
@@ -16,23 +41,65 @@ def build_quiz_keyboard():
     return keyboard
 
 
-def echo_message(event, vk_api, keyboard):
+def send_message(event, vk_api, keyboard, message):
     vk_api.messages.send(
         user_id=event.user_id,
-        message=event.text,
+        message=message,
         keyboard=keyboard.get_keyboard(),
         random_id=random.randint(1, 1000),
     )
 
 
+def handle_new_question_request(event, vk_api, keyboard, redis_connection, questions_and_answers):
+    random_question = random.choice(list(questions_and_answers))
+    redis_connection.set(event.user_id, random_question)
+    send_message(event, vk_api, keyboard, random_question)
+
+
+def handle_solution_attempt(event, vk_api, keyboard, redis_connection, questions_and_answers):
+    current_question = redis_connection.get(event.user_id)
+
+    if not current_question:
+        send_message(event, vk_api, keyboard, 'Напиши «Новый вопрос», чтобы начать!')
+        return
+
+    correct_answer = questions_and_answers[current_question]
+    cleaned_correct_answer = clean_quiz_answer(correct_answer)
+
+    if event.text.lower() == cleaned_correct_answer.lower():
+        send_message(event, vk_api, keyboard, 'Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос».')
+    else:
+        send_message(event, vk_api, keyboard, 'Неправильно... Попробуешь ещё раз?')
+
+
+def handle_give_up(event, vk_api, keyboard, redis_connection, questions_and_answers):
+    current_question = redis_connection.get(event.user_id)
+    correct_answer = questions_and_answers[current_question]
+    send_message(event, vk_api, keyboard, f'Правильный ответ: {correct_answer}')
+    handle_new_question_request(event, vk_api, keyboard, redis_connection, questions_and_answers)
+
+
 if __name__ == '__main__':
     load_dotenv()
+
     vk_session = vk.VkApi(token=os.getenv('VK_GROUP_TOKEN'))
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
 
+    redis_connection = redis.Redis(
+        host=os.getenv('REDIS_HOST', 'localhost'),
+        port=int(os.getenv('REDIS_PORT', 6379)),
+        decode_responses=True,
+    )
+
+    questions_and_answers = load_all_questions_from_directory('quiz-questions')
     quiz_keyboard = build_quiz_keyboard()
 
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            echo_message(event, vk_api, quiz_keyboard)
+            if event.text == 'Новый вопрос':
+                handle_new_question_request(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            elif event.text == 'Сдаться':
+                handle_give_up(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            else:
+                handle_solution_attempt(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
