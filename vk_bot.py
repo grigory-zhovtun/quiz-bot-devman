@@ -9,6 +9,7 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkLongPoll, VkEventType
 
 from read_quiz_files import load_all_questions_from_directory, clean_quiz_answer
+from telegram_log_handler import TelegramLogsHandler
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,11 @@ if __name__ == '__main__':
     )
     load_dotenv()
 
+    telegram_logs_handler = TelegramLogsHandler(
+        os.getenv('TELEGRAM_BOT_TOKEN'), os.getenv('TELEGRAM_CHAT_ID'),
+    )
+    logger.addHandler(telegram_logs_handler)
+
     vk_session = vk.VkApi(token=os.getenv('VK_GROUP_TOKEN'))
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
@@ -95,13 +101,13 @@ if __name__ == '__main__':
     quiz_keyboard = build_quiz_keyboard()
 
     for event in longpoll.listen():
-        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            try:
+        try:
+            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
                 if event.text == 'Новый вопрос':
                     handle_new_question_request(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
                 elif event.text == 'Сдаться':
                     handle_give_up(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
                 else:
                     handle_solution_attempt(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
-            except Exception:
-                logger.exception('Ошибка при обработке сообщения ВКонтакте')
+        except Exception:
+            logger.exception('Ошибка при обработке сообщения ВКонтакте')

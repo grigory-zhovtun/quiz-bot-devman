@@ -16,6 +16,7 @@ from telegram.ext import (
 )
 
 from read_quiz_files import load_all_questions_from_directory, clean_quiz_answer
+from telegram_log_handler import TelegramLogsHandler
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,10 @@ if __name__ == '__main__':
     )
     load_dotenv()
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+
+    telegram_logs_handler = TelegramLogsHandler(telegram_bot_token, telegram_chat_id)
+    logger.addHandler(telegram_logs_handler)
 
     updater = Updater(telegram_bot_token)
     dispatcher = updater.dispatcher
