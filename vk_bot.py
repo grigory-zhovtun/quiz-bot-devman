@@ -12,7 +12,7 @@ def build_quiz_keyboard():
     keyboard.add_button('Новый вопрос', color=VkKeyboardColor.PRIMARY)
     keyboard.add_button('Сдаться', color=VkKeyboardColor.NEGATIVE)
     keyboard.add_line()
-    keyboard.add_button('Мой счёт', color=VkKeyboardColor.DEFAULT)
+    keyboard.add_button('Мой счёт', color=VkKeyboardColor.SECONDARY)
     return keyboard
 
 
