@@ -25,6 +25,12 @@ def load_all_questions_from_directory(directory_path):
     return all_questions_and_answers
 
 
+def clean_quiz_answer(raw_answer):
+    cleaned = raw_answer.split('.')[0]
+    cleaned = cleaned.split('(')[0]
+    return cleaned.strip()
+
+
 def handle_start_command(update: Update, context: CallbackContext):
     quiz_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счёт']]
     reply_markup = ReplyKeyboardMarkup(quiz_keyboard)
@@ -38,8 +44,21 @@ def handle_new_question_request(update: Update, context: CallbackContext):
     update.message.reply_text(random_question)
 
 
-def handle_user_message(update: Update, context: CallbackContext):
-    update.message.reply_text(update.message.text)
+def handle_answer_attempt(update: Update, context: CallbackContext):
+    redis_connection = context.bot_data['redis_connection']
+    current_question = redis_connection.get(update.effective_user.id)
+
+    if not current_question:
+        update.message.reply_text('Нажми «Новый вопрос», чтобы начать!')
+        return
+
+    correct_answer = context.bot_data['questions_and_answers'][current_question]
+    cleaned_correct_answer = clean_quiz_answer(correct_answer)
+
+    if update.message.text.lower() == cleaned_correct_answer.lower():
+        update.message.reply_text('Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос».')
+    else:
+        update.message.reply_text('Неправильно... Попробуешь ещё раз?')
 
 
 if __name__ == '__main__':
@@ -59,7 +78,7 @@ if __name__ == '__main__':
 
     dispatcher.add_handler(CommandHandler('start', handle_start_command))
     dispatcher.add_handler(MessageHandler(Filters.regex('^Новый вопрос$'), handle_new_question_request))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_user_message))
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_answer_attempt))
 
     updater.start_polling()
     updater.idle()
