@@ -104,12 +104,13 @@ if __name__ == '__main__':
 
     for event in longpoll.listen():
         try:
-            if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-                if event.text == 'Новый вопрос':
-                    handle_new_question_request(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
-                elif event.text == 'Сдаться':
-                    handle_give_up(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
-                else:
-                    handle_solution_attempt(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            if not (event.type == VkEventType.MESSAGE_NEW and event.to_me):
+                continue
+            if event.text == 'Новый вопрос':
+                handle_new_question_request(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            elif event.text == 'Сдаться':
+                handle_give_up(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
+            else:
+                handle_solution_attempt(event, vk_api, quiz_keyboard, redis_connection, questions_and_answers)
         except Exception:
             logger.exception('Ошибка при обработке сообщения ВКонтакте')
