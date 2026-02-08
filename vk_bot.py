@@ -85,11 +85,11 @@ if __name__ == '__main__':
     load_dotenv()
 
     telegram_logs_handler = TelegramLogsHandler(
-        os.getenv('TELEGRAM_BOT_TOKEN'), os.getenv('TELEGRAM_CHAT_ID'),
+        os.environ['TELEGRAM_BOT_TOKEN'], os.environ['TELEGRAM_CHAT_ID'],
     )
     logger.addHandler(telegram_logs_handler)
 
-    vk_session = vk.VkApi(token=os.getenv('VK_GROUP_TOKEN'))
+    vk_session = vk.VkApi(token=os.environ['VK_GROUP_TOKEN'])
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
 

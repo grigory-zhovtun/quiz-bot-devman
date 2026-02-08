@@ -82,8 +82,8 @@ if __name__ == '__main__':
         level=logging.INFO,
     )
     load_dotenv()
-    telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-    telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    telegram_bot_token = os.environ['TELEGRAM_BOT_TOKEN']
+    telegram_chat_id = os.environ['TELEGRAM_CHAT_ID']
 
     telegram_logs_handler = TelegramLogsHandler(telegram_bot_token, telegram_chat_id)
     logger.addHandler(telegram_logs_handler)
