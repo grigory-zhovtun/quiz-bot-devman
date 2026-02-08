@@ -39,7 +39,7 @@ def handle_new_question_request(
     redis_connection: redis.Redis, questions_and_answers: dict[str, str],
 ) -> None:
     random_question = random.choice(list(questions_and_answers))
-    redis_connection.set(event.user_id, random_question)
+    redis_connection.set(f'vk-{event.user_id}', random_question)
     send_message(event, vk_api, keyboard, random_question)
 
 
@@ -47,7 +47,7 @@ def handle_solution_attempt(
     event, vk_api, keyboard: VkKeyboard,
     redis_connection: redis.Redis, questions_and_answers: dict[str, str],
 ) -> None:
-    current_question = redis_connection.get(event.user_id)
+    current_question = redis_connection.get(f'vk-{event.user_id}')
 
     if not current_question:
         send_message(event, vk_api, keyboard, 'Напиши «Новый вопрос», чтобы начать!')
@@ -66,7 +66,7 @@ def handle_give_up(
     event, vk_api, keyboard: VkKeyboard,
     redis_connection: redis.Redis, questions_and_answers: dict[str, str],
 ) -> None:
-    current_question = redis_connection.get(event.user_id)
+    current_question = redis_connection.get(f'vk-{event.user_id}')
 
     if not current_question:
         send_message(event, vk_api, keyboard, 'Напиши «Новый вопрос», чтобы начать!')

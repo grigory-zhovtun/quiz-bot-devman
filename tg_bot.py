@@ -38,14 +38,14 @@ def handle_start_command(update: Update, context: CallbackContext) -> QuizState:
 def handle_new_question_request(update: Update, context: CallbackContext) -> QuizState:
     random_question = random.choice(list(context.bot_data['questions_and_answers']))
     redis_connection = context.bot_data['redis_connection']
-    redis_connection.set(update.effective_user.id, random_question)
+    redis_connection.set(f'tg-{update.effective_user.id}', random_question)
     update.message.reply_text(random_question)
     return QuizState.ANSWERING
 
 
 def handle_solution_attempt(update: Update, context: CallbackContext) -> QuizState:
     redis_connection = context.bot_data['redis_connection']
-    current_question = redis_connection.get(update.effective_user.id)
+    current_question = redis_connection.get(f'tg-{update.effective_user.id}')
 
     if not current_question:
         update.message.reply_text('Нажми «Новый вопрос», чтобы начать!')
@@ -64,7 +64,7 @@ def handle_solution_attempt(update: Update, context: CallbackContext) -> QuizSta
 
 def handle_give_up(update: Update, context: CallbackContext) -> QuizState:
     redis_connection = context.bot_data['redis_connection']
-    current_question = redis_connection.get(update.effective_user.id)
+    current_question = redis_connection.get(f'tg-{update.effective_user.id}')
 
     if not current_question:
         update.message.reply_text('Нажми «Новый вопрос», чтобы начать!')
